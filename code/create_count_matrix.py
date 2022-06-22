@@ -12,7 +12,6 @@ def getGeneDict(file):
     genes = { target["Probes"][0]["RTS_ID"]:target["DisplayName"] for target in data["Targets"] }
     return genes
 
-# gene_dict = getGeneDict("./Mm_R_NGS_WTA_v1.0/Mm_R_NGS_WTA_v1.0.pkc")
 
 def getCountDict(dcc_file, pkc_file, gene_dict = {}):
     if not gene_dict:

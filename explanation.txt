@@ -1,0 +1,1 @@
+ALS1 = FUS, ALS2 = tdp
