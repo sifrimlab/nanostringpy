@@ -32,15 +32,15 @@ if(packageVersion("GeomxTools") > "2.1" &
   # see install instructions above 
 }
 
-datadir <- file.path("/home/david/Documents/als_overlay/nanostring/M-558KULeuven-Cruz/Raw_data_files/WTA/")
-DCCFiles <- dir(file.path(datadir, "DCC"), pattern = ".dcc$",
+datadir <- file.path("/home/david/Documents/als_overlay/nanostring/Kidney_Dataset_for_GeomxTools/Kidney_Dataset/")
+DCCFiles <- dir(file.path(datadir, "dccs"), pattern = ".dcc$",
                 full.names = TRUE, recursive = TRUE)
 
-PKCFiles <- dir(file.path(datadir, "Mm_R_NGS_WTA_v1.0/"), pattern = ".pkc$",
+PKCFiles <- dir(file.path(datadir, "pkcs"), pattern = ".pkc$",
                                 full.names = TRUE, recursive = TRUE)
 
 
-SampleAnnotationFile <- dir(file.path(datadir), pattern = "template.xlsx$",full.names = TRUE, recursive = TRUE)
+SampleAnnotationFile <- dir(file.path(datadir, "annotation"), pattern = "Annotations.xlsx$",full.names = TRUE, recursive = TRUE)
 
 demoData <-
   readNanoStringGeoMxSet(dccFiles = DCCFiles,
@@ -62,17 +62,19 @@ library(ggforce)
 # select the annotations we want to show, use `` to surround column names with
 # spaces or special symbols
 
-count_mat <- count(pData(demoData), `slide name`, class,  region, segment)
+count_mat <- count(pData(demoData), `slide name`, class, region, segment)
+# simplify the slide names
+count_mat$`slide name` <- gsub("disease", "d",
+                               gsub("normal", "n", count_mat$`slide name`))
+# gather the data and plot in order: class, slide name, region, segment
+test_gr <- gather_set_data(count_mat, 1:4)
+test_gr$x <- factor(test_gr$x,
+                    levels = c("class", "slide name", "region", "segment"))
 nrow(pData(demoData))
 count_mat
-# gather the data and plot in order: class, region, segment
-test_gr <- gather_set_data(count_mat, 1:4)
-test_gr
-test_gr$x <- factor(test_gr$x,
-                    levels = c("class", "region" , "segment", "slide name"))
 # plot Sankey
 ggplot(test_gr, aes(x, id = id, split = y, value = n)) +
-  geom_parallel_sets(aes(fill = class), alpha = 0.5, axis.width = 0.1) +
+  geom_parallel_sets(aes(fill = region), alpha = 0.5, axis.width = 0.1) +
   geom_parallel_sets_axes(axis.width = 0.2) +
   geom_parallel_sets_labels(color = "white", size = 5) +
   theme_classic(base_size = 17) + 
@@ -124,8 +126,8 @@ QC_Summary["TOTAL FLAGS", ] <-
 
 library(ggplot2)
 
-#col_by <- "segment"
-col_by <- "region"
+col_by <- "segment"
+#col_by <- "region"
 
 # Graphical summaries of QC statistics plot function
 QC_histogram <- function(assay_data = NULL,
@@ -154,7 +156,7 @@ QC_histogram(sData(demoData), "Saturated (%)", col_by, 50) +
   labs(title = "Sequencing Saturation (%)",
        x = "Sequencing Saturation (%)")
 QC_histogram(sData(demoData), "area", col_by, 1000, scale_trans = "log10")
-# QC_histogram(sData(demoData), "nuclei", col_by, 20) # not present in dataset
+QC_histogram(sData(demoData), "nuclei", col_by, 20) # not present in dataset
 
 # calculate the negative geometric means for each module
 negativeGeoMeans <- 
@@ -164,10 +166,11 @@ negativeGeoMeans <-
          assayDataApply(x, MARGIN = 2, FUN = ngeoMean, elt = "exprs") 
        }) 
 protocolData(demoData)[["NegGeoMean"]] <- negativeGeoMeans
+negativeGeoMeans
 # explicitly copy the Negative geoMeans from sData to pData
 negCols <- paste0("NegGeoMean_", modules)
 pData(demoData)[, negCols] <- sData(demoData)[["NegGeoMean"]]
-col_by = "region"
+#col_by = "region"
 for(ann in negCols) {
   plt <- QC_histogram(pData(demoData), ann, col_by, 2, scale_trans = "log10")
   print(plt)
@@ -225,7 +228,6 @@ for(module in modules) {
   }
 }
 pData(target_demoData)$LOQ <- LOQ
-
 # Filter out
 LOQ_Mat <- c()
 for(module in modules) {
@@ -260,7 +262,7 @@ pData(target_demoData)$DetectionThreshold <-
 # stacked bar plot of different cut points (1%, 5%, 10%, 15%)
 ggplot(pData(target_demoData),
        aes(x = DetectionThreshold)) +
-  geom_bar(aes(fill = region)) +
+  geom_bar(aes(fill = class)) +
   geom_text(stat = "count", aes(label = ..count..), vjust = -0.5) +
   theme_bw() +
   scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
@@ -276,7 +278,6 @@ ggplot(pData(target_demoData),
 kable(table(pData(target_demoData)$DetectionThreshold,
             pData(target_demoData)$class))
 
-dim(target_demoData)
 target_demoData <-
   target_demoData[, pData(target_demoData)$GeneDetectionRate >= .1]
 
@@ -286,11 +287,18 @@ dim(target_demoData)
 # select the annotations we want to show, use `` to surround column names with
 # spaces or special symbols
 
-count_mat <- count(pData(target_demoData), `slide name`, class, region, segment)
-# gather the data and plot in order: class, region, region, segment
+# select the annotations we want to show, use `` to surround column names with
+# spaces or special symbols
+count_mat <- count(pData(demoData), `slide name`, class, region, segment)
+# simplify the slide names
+count_mat$`slide name` <- 
+  gsub("disease", "d",
+       gsub("normal", "n", count_mat$`slide name`))
+# gather the data and plot in order: class, slide name, region, segment
 test_gr <- gather_set_data(count_mat, 1:4)
-test_gr$x <- factor(test_gr$x,
-                    levels = c("class",  "region" , "segment", "slide name"))
+test_gr$x <-
+  factor(test_gr$x,
+         levels = c("class", "slide name", "region", "segment"))
 # plot Sankey
 ggplot(test_gr, aes(x, id = id, split = y, value = n)) +
   geom_parallel_sets(aes(fill = class), alpha = 0.5, axis.width = 0.1) +
@@ -318,10 +326,10 @@ LOQ_Mat <- LOQ_Mat[, colnames(target_demoData)]
 fData(target_demoData)$DetectedSegments <- rowSums(LOQ_Mat, na.rm = TRUE)
 fData(target_demoData)$DetectionRate <-
   fData(target_demoData)$DetectedSegments / nrow(pData(target_demoData))
-"Chat" %in% rownames(fData(target_demoData))
-# Gene of interest detection table
-goi <- c("Chat","Slc18a3","Ahnak2","Chodl","Slc5a7","Mmp9","Pdgfd","Grin3b","Isl1","Mnx1","Vipr2", "Fus", "Tardbp")
 
+# Gene of interest detection table
+goi <- c("PDCD1", "CD274", "IFNG", "CD8A", "CD68", "EPCAM",
+         "KRT18", "NPHS1", "NPHS2", "CALB1", "CLDN8")
 goi_df <- data.frame(
   Gene = goi,
   Number = fData(target_demoData)[goi, "DetectedSegments"],
@@ -372,7 +380,7 @@ library(reshape2)  # for melt
 library(cowplot)   # for plot_grid
 
 # Graph Q3 value vs negGeoMean of Negatives
-ann_of_interest <- "segment"
+ann_of_interest <- "region"
 Stat_data <- 
   data.frame(row.names = colnames(exprs(target_demoData)),
              Segment = colnames(exprs(target_demoData)),
@@ -456,7 +464,7 @@ umap_out <-
        config = custom_umap)
 pData(target_demoData)[, c("UMAP1", "UMAP2")] <- umap_out$layout[, c(1,2)]
 ggplot(pData(target_demoData),
-       aes(x = UMAP1, y = UMAP2, color = class, shape = segment)) +
+       aes(x = UMAP1, y = UMAP2, color = segment, shape = class)) +
   geom_point(size = 3) +
   theme_bw()
 
@@ -468,7 +476,7 @@ tsne_out <-
         perplexity = ncol(target_demoData)*.15)
 pData(target_demoData)[, c("tSNE1", "tSNE2")] <- tsne_out$Y[, c(1,2)]
 ggplot(pData(target_demoData),
-       aes(x = tSNE1, y = tSNE2, color = class, shape = segment)) +
+       aes(x = tSNE1, y = tSNE2, color = segment, shape = class)) +
   geom_point(size = 3) +
   theme_bw()
 
@@ -497,8 +505,8 @@ pheatmap(assayDataElement(target_demoData[GOI, ], elt = "log_q"),
          breaks = seq(-3, 3, 0.05),
          color = colorRampPalette(c("purple3", "black", "yellow2"))(120),
          annotation_col = 
-           #pData(target_demoData)[, c("class", "segment","region")])
-           pData(target_demoData)[, c("class", "segment")])
+           pData(target_demoData)[, c("class", "segment","region")])
+           #pData(target_demoData)[, c("class", "segment")])
            #pData(target_demoData)[, c( "segment")])
 
 #################
@@ -506,27 +514,21 @@ pheatmap(assayDataElement(target_demoData[GOI, ], elt = "log_q"),
 #################
 # convert test variables to factors
 pData(target_demoData)$testRegion <- 
-  #factor(pData(target_demoData)$class, c("CTRL", "FUS", "TDP-43"))
-  factor(pData(target_demoData)$segment, c("ChATpos", "ChATneg"))
+  factor(pData(target_demoData)$region, c("glomerulus", "tubule"))
 pData(target_demoData)[["slide"]] <- 
-  factor(pData(target_demoData)[["replicate_nr"]])
+  factor(pData(target_demoData)[["slide name"]])
 assayDataElement(object = target_demoData, elt = "log_q") <-
   assayDataApply(target_demoData, 2, FUN = log, base = 2, elt = "q_norm")
 
 # run LMM:
 # formula follows conventions defined by the lme4 package
 results <- c()
-#pData(target_demoData[,ind])[["slide"]]
-#length(pData(target_demoData[,ind]))
-#pData(target_demoData[,ind])
-for(status in c("CTRL", "FUS", "TDP-43")) {
+for(status in c("DKD", "normal")) {
   ind <- pData(target_demoData)$class == status
   mixedOutmc <-
     mixedModelDE(target_demoData[, ind],
-                 #target_demoData,
                  elt = "log_q",
-                 #modelFormula = ~ testRegion + (1 + testRegion | slide),
-                 modelFormula = ~ testRegion + (1 | slide),
+                 modelFormula = ~ testRegion + (1 + testRegion | slide),
                  groupVar = "testRegion",
                  #nCores = parallel::detectCores())
                  nCores = 1,
@@ -550,8 +552,9 @@ for(status in c("CTRL", "FUS", "TDP-43")) {
    results <- rbind(results, r_test)
 }
 
+
 ### interpreting results table
-kable(subset(results, Gene %in% goi), digits = 3,
+kable(subset(results, Gene %in% goi & Subset == "normal"), digits = 3,
       caption = "DE results for Genes of Interest",
       align = "lc", row.names = FALSE)
 
@@ -560,7 +563,7 @@ kable(subset(results, Gene %in% goi), digits = 3,
 ###############################################
 # convert test variables to factors
 pData(target_demoData)$testClass <-
-  factor(pData(target_demoData)$class, c("CTRL", "FUS", "TDP-43"))
+  factor(pData(target_demoData)$class, c("normal", "DKD"))
 
 # run LMM:
 # formula follows conventions defined by the lme4 package
@@ -595,9 +598,8 @@ for(segment in c("ChATpos", "ChATneg")) {
   r_test <- r_test[, c("Gene", "Subset", "Contrast", "Estimate", 
                      "Pr(>|t|)", "FDR")]
   r_test
-  results2 <- rbind(results2, r_test)
-}
-results2
+  results2 <- rbind(results2, r_test)}
+  results2
     
 kable(subset(results2, Gene %in% goi), digits = 3,
     caption = "DE results for Genes of Interest",
@@ -619,8 +621,8 @@ results$Color <- factor(results$Color,
 # order genes for convenience:
 results$invert_P <- (-log10(results$`Pr(>|t|)`)) * sign(results$Estimate)
 top_g <- c()
-#for(cond in c("ChATneg", "ChATpos")) {
-for(cond in c("CTRL", "FUS", "TDP-43")) {
+for(cond in c("DKD", "normal")) {
+#for(cond in c("SN")) {
   ind <- results$Subset == cond
   top_g <- c(top_g,
              results[ind, 'Gene'][
@@ -629,6 +631,7 @@ for(cond in c("CTRL", "FUS", "TDP-43")) {
                order(results[ind, 'invert_P'], decreasing = FALSE)[1:15]])
 }
 top_g <- unique(top_g)
+top_g
 results <- results[, -1*ncol(results)] # remove invert_P from matrix
 # 
 length(results$Gene)
@@ -660,15 +663,15 @@ facet_wrap(~Subset, scales = "free_y")
 
 
 ### Plot Genes of interest
-kable(subset(results, Gene %in% goi), row.names = FALSE)
+kable(subset(results, Gene %in% c('PDHA1','ITGB1')), row.names = FALSE)
 
 ggplot(pData(target_demoData),
-     aes(x = class, fill = segment,
-         y = assayDataElement(target_demoData["Chat", ],
+     aes(x = class, fill = class,
+         y = assayDataElement(target_demoData["Tardbp", ],
                               elt = "q_norm"))) +
 geom_violin() +
 geom_jitter(width = .2) +
-labs(y = "Chat Expression") +
+labs(y = "Tardbp Expression") +
 scale_y_continuous(trans = "log2") +
 facet_wrap(~region) +
 theme_bw()
@@ -710,7 +713,7 @@ ggplot(pData(target_demoData),
 ##################################
 
 #select top significant genes based on significance, plot with pheatmap
-GOI <- unique(subset(results, `Pr(>|t|)` < 0.05)$Gene)
+GOI <- unique(subset(results2, `Pr(>|t|)` < 0.05)$Gene)
 GOI
 pheatmap(log2(assayDataElement(target_demoData[GOI, ], elt = "q_norm")),
          scale = "row", 
